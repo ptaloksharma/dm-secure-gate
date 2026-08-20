@@ -1,0 +1,113 @@
+"""Standardized scan-report contract shared by the CLI engine and the web UI.
+
+Every scan produces exactly one :class:`ScanReport` (serialized to JSON). The
+field names are stable so the Next.js dashboard can read them without coupling
+to internals.
+"""
+from __future__ import annotations
+
+import datetime as _dt
+from dataclasses import dataclass, field, asdict
+from typing import List, Optional
+
+
+# Canonical severity ladder. Lower index == more severe.
+SEVERITY_ORDER = ["Critical", "High", "Medium", "Low", "Info"]
+
+
+class Severity:
+    CRITICAL = "Critical"
+    HIGH = "High"
+    MEDIUM = "Medium"
+    LOW = "Low"
+    INFO = "Info"
+
+
+@dataclass
+class Finding:
+    """A single detected weakness instance."""
+    cwe: str                       # e.g. "CWE-798"
+    title: str
+    severity: str                 # one of SEVERITY_ORDER
+    file: str                     # repo-relative path
+    line: Optional[int] = None    # 1-based; None when file-level
+    snippet: str = ""             # offending line / evidence (may be trimmed)
+    description: str = ""         # human-readable explanation
+    recommendation: str = ""      # remediation guidance (for the UI cards)
+    confidence: str = "high"      # high | medium | low
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
+class ScanReport:
+    tool: str = "DM SecureGate"
+    version: str = "0.1.0"
+    target: str = ""
+    scanned_at: str = ""
+    files_scanned: int = 0
+    checks_run: List[str] = field(default_factory=list)
+    findings: List[Finding] = field(default_factory=list)
+    grade: str = ""
+    counts: dict = field(default_factory=dict)
+    summary: str = ""
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["findings"] = [f.to_dict() for f in self.findings]
+        return d
+
+    def to_json(self, indent: int = 2) -> str:
+        import json
+        return json.dumps(self.to_dict(), indent=indent)
+
+
+# --- Grade thresholds (configurable but stable contract) -----------------------
+# A "Security Grade" of A means no Critical/High; each Critical/HIgh degrades it.
+def grade_for_counts(critical: int, high: int, medium: int = 0) -> str:
+    if critical > 0:
+        return "F"
+    if high > 0:
+        return "D" if high >= 3 else "C"
+    if medium > 0:
+        return "B"
+    return "A"
+
+
+def build_report(
+    target: str,
+    files_scanned: int,
+    checks_run: List[str],
+    findings: List[Finding],
+    version: str = "0.1.0",
+) -> ScanReport:
+    counts = {s: 0 for s in SEVERITY_ORDER}
+    for f in findings:
+        counts[f.severity] = counts.get(f.severity, 0) + 1
+    critical = counts.get(Severity.CRITICAL, 0)
+    high = counts.get(Severity.HIGH, 0)
+    medium = counts.get(Severity.MEDIUM, 0)
+    grade = grade_for_counts(critical, high, medium)
+    if critical or high:
+        summary = (
+            f"{critical} Critical and {high} High severity issues detected. "
+            "Authentication boundary and credential hygiene must be remediated."
+        )
+    elif medium:
+        summary = (
+            f"No Critical/High issues. {medium} Medium issue(s) should be addressed."
+        )
+    else:
+        summary = "No issues detected across all enabled checks. Baseline secure."
+    return ScanReport(
+        target=target,
+        scanned_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+        files_scanned=files_scanned,
+        checks_run=checks_run,
+        findings=findings,
+        grade=grade,
+        counts=counts,
+        summary=summary,
+        version=version,
+    )

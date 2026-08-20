@@ -1,0 +1,7 @@
+# generated scan artifacts
+report.json
+
+# python
+__pycache__/
+*.pyc
+.venv/
