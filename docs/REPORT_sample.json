@@ -1,0 +1,46 @@
+{
+  "tool": "DM SecureGate",
+  "version": "0.1.0",
+  "target": "/home/opc/expense-tracker",
+  "scanned_at": "2026-08-20T09:15:36.166359+00:00",
+  "files_scanned": 40,
+  "checks_run": [
+    "check_hardcoded_credentials",
+    "check_missing_auth_boundary",
+    "check_wildcard_cors",
+    "check_container_hygiene"
+  ],
+  "findings": [
+    {
+      "cwe": "CWE-250",
+      "title": "Container runs as root (no USER directive)",
+      "severity": "Medium",
+      "file": "Dockerfile",
+      "line": null,
+      "snippet": "(no USER directive)",
+      "description": "Dockerfiles default to root when no USER is set. Drop privileges by declaring a non-root USER before the CMD/ENTRYPOINT.",
+      "recommendation": "Add `USER <non-root>` (create the user earlier in the build).",
+      "confidence": "high"
+    },
+    {
+      "cwe": "CWE-749",
+      "title": "Container port exposed to all interfaces",
+      "severity": "Medium",
+      "file": "docker-compose.yml",
+      "line": 19,
+      "snippet": "- \"8000:8000\"",
+      "description": "A published port mapping binds the service to all host interfaces (0.0.0.0), widening the network attack surface.",
+      "recommendation": "Bind to 127.0.0.1 (e.g. '127.0.0.1:8080:8080') or rely on an internal docker network / reverse proxy.",
+      "confidence": "medium"
+    }
+  ],
+  "grade": "B",
+  "counts": {
+    "Critical": 0,
+    "High": 0,
+    "Medium": 2,
+    "Low": 0,
+    "Info": 0
+  },
+  "summary": "No Critical/High issues. 2 Medium issue(s) should be addressed."
+}

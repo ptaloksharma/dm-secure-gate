@@ -87,6 +87,21 @@ def test_non_container_file_ignored():
     assert check_container_hygiene(c) == []
 
 
+def test_executive_markdown_render():
+    from securegate.report import build_report, Finding, Severity
+    f = Finding(cwe="CWE-798", title="Hard-coded credential",
+                severity=Severity.CRITICAL, file="app/secret.py", line=3,
+                description="desc", recommendation="rotate it")
+    rep = build_report(target="/repo", files_scanned=10,
+                       checks_run=["check_hardcoded_credentials"], findings=[f])
+    md = rep.to_markdown(client="Acme Corp")
+    assert "Acme Corp" in md
+    assert "**F**" in md
+    assert "CWE-798" in md
+    assert "Critical" in md
+    assert "DM Digital Solutions B.V." in md
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

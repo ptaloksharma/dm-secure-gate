@@ -27,26 +27,35 @@ def run_scan(target: str) -> ScanReport:
 
 def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="securegate",
+        prog="dm-secure",
         description="DM SecureGate — static security baseline scanner "
-                    "(CWE-798, CWE-306, CWE-942).",
+                    "(CWE-798, CWE-306, CWE-942, CWE-250/749/494).",
     )
     parser.add_argument("target", nargs="?", default=".", help="repo path to scan")
-    parser.add_argument("-o", "--output", help="write JSON report to this path")
+    parser.add_argument("-o", "--output", help="write report to this path")
+    parser.add_argument("--format", choices=["json", "md"], default="json",
+                        help="report format: json (default) or md (executive Markdown)")
+    parser.add_argument("--client", default="Client",
+                        help="client name shown in the executive Markdown report")
     parser.add_argument("--quiet", action="store_true", help="suppress console summary")
     args = parser.parse_args(argv)
 
     report = run_scan(args.target)
 
+    if args.format == "md":
+        rendered = report.to_markdown(client=args.client)
+    else:
+        rendered = report.to_json()
+
     if args.output:
         out = os.path.abspath(args.output)
         with open(out, "w", encoding="utf-8") as fh:
-            fh.write(report.to_json())
+            fh.write(rendered)
         if not args.quiet:
             print(f"Report written to {out}")
 
     if not args.quiet:
-        print(report.to_json())
+        print(rendered)
     else:
         # even in quiet mode, surface the grade + counts to stderr
         print(
