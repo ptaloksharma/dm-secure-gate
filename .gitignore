@@ -1,1 +1,8 @@
 egg-info
+
+# lead-tracker-api sandbox runtime artifacts (never commit)
+lead-tracker-api/.venv/
+lead-tracker-api/leads.db
+lead-tracker-api/**/__pycache__/
+__pycache__/
+*.pyc
