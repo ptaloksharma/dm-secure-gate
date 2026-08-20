@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# dm-secure — local launcher for the DM SecureGate scanner.
+#
+# Works WITHOUT a pip install: it locates the bundled Python package next to
+# this script and runs the CLI. If you'd rather have a true global command, run
+# `pip install -e ./cli` (uses the `dm-secure` / `securegate` console scripts).
+#
+# Usage:  dm-secure scan ./path/to/repo [-o report.json]
+set -euo pipefail
+
+# Resolve this script's directory (cli/bin -> cli).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLI_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"          # .../cli
+PKG_DIR="$CLI_DIR/securegate"
+
+if [ ! -d "$PKG_DIR" ]; then
+  echo "dm-secure: could not locate the securegate package at $PKG_DIR" >&2
+  exit 1
+fi
+
+# Prefer a venv if one was created beside the cli dir, else system python3.
+for py in "$CLI_DIR/.venv/bin/python" "$CLI_DIR/../.venv/bin/python" python3; do
+  if command -v "$py" >/dev/null 2>&1; then PY="$py"; break; fi
+done
+
+cd "$CLI_DIR"
+exec "$PY" -m securegate "$@"

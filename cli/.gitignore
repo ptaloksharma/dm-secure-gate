@@ -5,3 +5,8 @@ report.json
 __pycache__/
 *.pyc
 .venv/
+*.egg-info/
+dm_securegate_cli.egg-info/
+
+# editor
+.DS_Store

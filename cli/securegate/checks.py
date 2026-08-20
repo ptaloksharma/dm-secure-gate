@@ -169,8 +169,131 @@ def check_wildcard_cors(ctx: CheckContext) -> List[Finding]:
     return findings
 
 
+# ---------------------------------------------------------------------------
+# CWE-250 / CWE-749 — Container hygiene (Dockerfile + docker-compose.yml)
+# ---------------------------------------------------------------------------
+# Anti-patterns we flag:
+#   * running as root (USER root, or no USER at all in a Dockerfile)
+#   * publishing ports to 0.0.0.0 / all interfaces (CWE-749 exposed surface)
+#   * unpinned `latest` image tags (non-reproducible, silent drift)
+#   * `privileged: true` containers (full host access)
+_CONTAINER_FILE_RE = re.compile(r"(?i)(Dockerfile[^/]*|.*docker-compose[^/]*\.(ya?ml|json))$")
+_ROOT_USER_RE = re.compile(r"(?im)^\s*USER\s+root\b")
+_USER_SET_RE = re.compile(r"(?im)^\s*USER\s+\S+")
+_PRIVILEGED_RE = re.compile(r"(?im)^\s*privileged\s*:\s*true\b")
+_PORT_PUBLISH_RE = re.compile(
+    r"(?i)^\s*-\s*[\"']?\d{1,5}:[\"']?\d{1,5}\b|^\s*ports\s*:|^\s*-\s*[\"']?[\"']?\d{1,5}:"
+)
+_LATEST_TAG_RE = re.compile(r"(?i)(FROM\s+\S+|:\s*\S*)\blatest\b")
+
+
+def check_container_hygiene(ctx: CheckContext) -> List[Finding]:
+    findings: List[Finding] = []
+    if not _CONTAINER_FILE_RE.search(ctx.rel_path):
+        return findings
+    text = ctx.text
+    is_dockerfile = ctx.rel_path.lower().startswith("dockerfile") or ctx.rel_path.lower().endswith("/dockerfile")
+
+    # --- Dockerfile-specific: root user / no USER ---
+    if is_dockerfile:
+        if _ROOT_USER_RE.search(text):
+            findings.append(Finding(
+                cwe="CWE-250",
+                title="Container runs as root USER",
+                severity=Severity.HIGH,
+                file=ctx.rel_path,
+                snippet="USER root",
+                description=(
+                    "The image explicitly switches to the root user. A compromise "
+                    "of the app then yields root inside the container, easing "
+                    "break-out and host-impact escalation."
+                ),
+                recommendation="Add a non-root USER (e.g. create a dedicated user and `USER appuser`).",
+                confidence="high",
+            ))
+        elif not _USER_SET_RE.search(text):
+            findings.append(Finding(
+                cwe="CWE-250",
+                title="Container runs as root (no USER directive)",
+                severity=Severity.MEDIUM,
+                file=ctx.rel_path,
+                snippet="(no USER directive)",
+                description=(
+                    "Dockerfiles default to root when no USER is set. Drop "
+                    "privileges by declaring a non-root USER before the CMD/ENTRYPOINT."
+                ),
+                recommendation="Add `USER <non-root>` (create the user earlier in the build).",
+                confidence="high",
+            ))
+
+    # --- unpinned `latest` base image ---
+    for i, line in enumerate(ctx.lines, start=1):
+        if _LATEST_TAG_RE.search(line) and "FROM" in line:
+            findings.append(Finding(
+                cwe="CWE-494",
+                title="Unpinned 'latest' image tag",
+                severity=Severity.MEDIUM,
+                file=ctx.rel_path,
+                line=i,
+                snippet=line.strip()[:160],
+                description=(
+                    "A `latest` base image is mutable and non-reproducible; the "
+                    "running image can change silently between builds, undermining "
+                    "supply-chain integrity."
+                ),
+                recommendation="Pin the base image to an explicit version/digest (e.g. python:3.11-slim).",
+                confidence="high",
+            ))
+            break  # one finding per file for the latest-tag issue
+
+    # --- docker-compose: privileged + exposed ports ---
+    if "compose" in ctx.rel_path.lower():
+        for i, line in enumerate(ctx.lines, start=1):
+            if _PRIVILEGED_RE.search(line):
+                findings.append(Finding(
+                    cwe="CWE-250",
+                    title="Privileged container in compose",
+                    severity=Severity.HIGH,
+                    file=ctx.rel_path,
+                    line=i,
+                    snippet=line.strip()[:160],
+                    description=(
+                        "privileged: true grants the container near-full access to "
+                        "the host kernel, equivalent to root on the host."
+                    ),
+                    recommendation="Remove `privileged: true`; grant only the specific capabilities required.",
+                    confidence="high",
+                ))
+        # exposed ports: a mapping published to all interfaces
+        if re.search(r"(?i)ports\s*:\s*\n(\s*-\s*[\"']?\d)", text) or "0.0.0.0" in text:
+            # find the first offending publish line
+            for i, line in enumerate(ctx.lines, start=1):
+                if re.match(r"(?i)^\s*-\s*[\"']?\d{1,5}:", line) or "0.0.0.0" in line:
+                    findings.append(Finding(
+                        cwe="CWE-749",
+                        title="Container port exposed to all interfaces",
+                        severity=Severity.MEDIUM,
+                        file=ctx.rel_path,
+                        line=i,
+                        snippet=line.strip()[:160],
+                        description=(
+                            "A published port mapping binds the service to all host "
+                            "interfaces (0.0.0.0), widening the network attack surface."
+                        ),
+                        recommendation=(
+                            "Bind to 127.0.0.1 (e.g. '127.0.0.1:8080:8080') or rely on "
+                            "an internal docker network / reverse proxy."
+                        ),
+                        confidence="medium",
+                    ))
+                    break
+
+    return findings
+
+
 ALL_CHECKS: List[Check] = [
     check_hardcoded_credentials,
     check_missing_auth_boundary,
     check_wildcard_cors,
+    check_container_hygiene,
 ]
