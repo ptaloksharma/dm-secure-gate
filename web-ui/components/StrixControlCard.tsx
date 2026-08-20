@@ -22,7 +22,31 @@ export function StrixControlCard() {
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const [target, setTarget] = useState<string>("");
+  const [apiKey, setApiKey] = useState<string>("");
   const abortRef = useRef<AbortController | null>(null);
+
+  // Restore a previously entered key from localStorage for convenience.
+  // NOTE: the key lives only in the browser; it is never sent to the server
+  // except inside the POST body for a run, and the server injects it into the
+  // Strix subprocess env in-memory (never written to disk).
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("dmsecure.strix.openrouterKey");
+      if (saved) setApiKey(saved);
+    } catch {
+      /* localStorage unavailable */
+    }
+  }, []);
+
+  const persistKey = (value: string) => {
+    setApiKey(value);
+    try {
+      if (value) window.localStorage.setItem("dmsecure.strix.openrouterKey", value);
+      else window.localStorage.removeItem("dmsecure.strix.openrouterKey");
+    } catch {
+      /* ignore */
+    }
+  };
 
   const refreshStatus = useCallback(async () => {
     setLoading(true);
@@ -50,7 +74,11 @@ export function StrixControlCard() {
         const res = await fetch("/api/strix/run", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ target: target || undefined, install }),
+          body: JSON.stringify({
+            target: target || undefined,
+            install,
+            apiKey: apiKey || undefined,
+          }),
           cache: "no-store",
           signal: ctrl.signal,
         });
@@ -153,6 +181,52 @@ export function StrixControlCard() {
           )
         )}
       </div>
+
+      {status?.installed && (
+        <div style={{ marginTop: 14 }}>
+          <label style={{ fontSize: 12, color: "#8b98a5" }}>
+            OpenRouter API Key{" "}
+            <span style={{ color: "#6b7785" }}>
+              (kept in browser; injected into the Strix run only)
+            </span>
+          </label>
+          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => persistKey(e.target.value)}
+              placeholder="sk-or-v1-… (optional)"
+              autoComplete="off"
+              spellCheck={false}
+              style={{
+                flex: 1,
+                background: "#0b0f14",
+                border: "1px solid #1f2933",
+                borderRadius: 8,
+                color: "#e6edf3",
+                padding: "8px 10px",
+                fontSize: 13,
+              }}
+            />
+            {apiKey && (
+              <button
+                type="button"
+                onClick={() => persistKey("")}
+                style={{
+                  background: "transparent",
+                  border: "1px solid #1f2933",
+                  borderRadius: 8,
+                  color: "#8b98a5",
+                  padding: "0 12px",
+                  cursor: "pointer",
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {status?.installed && (
         <div style={{ marginTop: 12 }}>

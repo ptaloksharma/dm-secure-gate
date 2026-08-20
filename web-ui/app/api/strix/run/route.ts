@@ -8,9 +8,13 @@ import fs from "node:fs";
  * Triggers an autonomous Strix execution against a target and streams live agent
  * progress back to the browser as Server-Sent Events (text/event-stream).
  *
- * Body: { target?: string, install?: boolean }
+ * Body: { target?: string, install?: boolean, apiKey?: string }
  *   - install=true (or strix missing): pipe the official installer through bash.
  *   - otherwise: spawn `strix --target <path> -n -m quick` and forward its stdout/stderr.
+ *   - apiKey: an OpenRouter key supplied by the UI. It is injected ONLY into the
+ *     spawned Strix subprocess environment (OPENROUTER_API_KEY) for that single
+ *     run. It is never written to disk, never logged, and is not retained by the
+ *     server after the request completes.
  */
 export const dynamic = "force-dynamic";
 
@@ -45,8 +49,17 @@ function findStrix(): string | null {
   return null;
 }
 
+/** Build the env for the child process, injecting the API key in-memory only. */
+function childEnv(apiKey?: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  if (apiKey && apiKey.trim().length > 0) {
+    env.OPENROUTER_API_KEY = apiKey.trim();
+  }
+  return env;
+}
+
 export async function POST(request: Request) {
-  let body: { target?: string; install?: boolean } = {};
+  let body: { target?: string; install?: boolean; apiKey?: string } = {};
   try {
     body = await request.json();
   } catch {
@@ -56,6 +69,7 @@ export async function POST(request: Request) {
   const target =
     body.target || process.env.SECUREGATE_TARGET || process.cwd();
   const doInstall = !!body.install;
+  const apiKey = body.apiKey;
   const strix = findStrix();
 
   const encoder = new TextEncoder();
@@ -85,7 +99,7 @@ export async function POST(request: Request) {
       if (doInstall || !strix) {
         send("[strix] engine not found locally — launching installer…");
         const proc = spawn("bash", ["-c", INSTALL_CMD], {
-          env: process.env,
+          env: childEnv(apiKey),
         });
         proc.stdout.on("data", (d) => send("[install] " + d.toString()));
         proc.stderr.on("data", (d) => send("[install] " + d.toString()));
@@ -99,8 +113,13 @@ export async function POST(request: Request) {
 
       send(`[strix] launching autonomous pentest → target: ${target}`);
       send(`[strix] engine: ${strix}`);
+      send(
+        apiKey
+          ? "[strix] using OpenRouter API key supplied via UI (in-memory only)."
+          : "[strix] note: no API key supplied — using host environment if present."
+      );
       const proc = spawn(strix, ["--target", target, "-n", "-m", "quick"], {
-        env: process.env,
+        env: childEnv(apiKey),
       });
       proc.stdout.on("data", (d) => send(d.toString()));
       proc.stderr.on("data", (d) => send(d.toString()));
