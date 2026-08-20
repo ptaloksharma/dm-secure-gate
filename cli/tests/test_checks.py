@@ -4,7 +4,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from securegate.checks import (
+from dm_secure.checks import (
     check_hardcoded_credentials, check_wildcard_cors,
     check_missing_auth_boundary, check_container_hygiene, CheckContext,
 )
@@ -88,7 +88,7 @@ def test_non_container_file_ignored():
 
 
 def test_executive_markdown_render():
-    from securegate.report import build_report, Finding, Severity
+    from dm_secure.report import build_report, Finding, Severity
     f = Finding(cwe="CWE-798", title="Hard-coded credential",
                 severity=Severity.CRITICAL, file="app/secret.py", line=3,
                 description="desc", recommendation="rotate it")

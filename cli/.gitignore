@@ -7,6 +7,8 @@ __pycache__/
 .venv/
 *.egg-info/
 dm_securegate_cli.egg-info/
+build/
+dist/
 
 # editor
 .DS_Store

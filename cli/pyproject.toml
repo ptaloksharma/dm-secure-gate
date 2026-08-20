@@ -1,17 +1,40 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dm-securegate-cli"
+name = "dm-secure-gate"
 version = "0.1.0"
-description = "DM SecureGate static security baseline scanner (CWE-798/306/942/250/749/494)"
+description = "DM SecureGate — static security baseline scanner & executive compliance dashboard (CWE-798/306/942/250/749/494) by DM Digital Solutions B.V."
+readme = "README.md"
 requires-python = ">=3.9"
+license = { text = "Proprietary — DM Digital Solutions B.V." }
+authors = [{ name = "DM Digital Solutions B.V.", email = "security@dmdigital.example" }]
+keywords = ["security", "scanner", "cwe", "compliance", "static-analysis", "dashboard"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "License :: Other/Proprietary License",
+    "Topic :: Security",
+    "Environment :: Console",
+]
 dependencies = []
 
+[project.urls]
+Homepage = "https://dmdigital.example/securegate"
+Repository = "https://dmdigital.example/dm-securegate"
+
 [project.scripts]
-securegate = "securegate.cli:main"
-dm-secure = "securegate.cli:main"
+dm-secure = "dm_secure.cli:main"
+dm-secure-gate = "dm_secure.cli:main"
 
 [tool.setuptools]
-packages = ["securegate"]
+packages = ["dm_secure", "dm_secure.webui"]
+
+[tool.setuptools.package-data]
+# Bundle the built Next.js dashboard so `dm-secure ui` can launch it locally.
+"dm_secure.webui" = ["**/*"]
+
+[tool.setuptools.exclude-package-data]
+# Never ship Python caches or build leftovers.
+"dm_secure.webui" = ["**/__pycache__/**", "**/*.pyc", "**/.cache/**"]

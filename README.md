@@ -28,25 +28,38 @@ engine stays portable and fast.
 
 ---
 
-## Installation — run the CLI globally
+## Installation
 
-Two options; either works from **any** working directory.
+DM SecureGate is distributed as the **`dm-secure-gate`** Python package (package name
+`dm-secure-gate`, console command `dm-secure`). The wheel bundles the Next.js
+dashboard, so `dm-secure ui` works with **zero runtime dependencies** (Python 3.9+).
 
-### A) Pip-install (recommended — a true global command)
+### A) From PyPI (recommended for end users — *publish-ready*)
 
 ```bash
-pip install -e ./cli
-dm-secure ./path/to/repo            # also aliased as `securegate`
+pip install dm-secure-gate
+dm-secure ./path/to/repo          # scans and prints the JSON report
 ```
 
-### B) Zero-install local wrapper (no pip needed)
+> The package is built with `python3 -m build` (produces `dist/*.whl` + `*.tar.gz`)
+> and is ready to publish to PyPI with `twine upload dist/*`. Local/CI installs use
+> the same wheel.
+
+### B) Local development install (editable)
+
+```bash
+cd cli && pip install -e .
+dm-secure ./path/to/repo
+```
+
+### C) Zero-install local wrapper (no pip needed)
 
 ```bash
 ./cli/bin/dm-secure ./path/to/repo
 ```
 
-Both resolve the scanner package automatically and work regardless of your current
-directory.
+All three register the `dm-secure` command globally (and work from **any** directory).
+An alias `dm-secure-gate` is also installed.
 
 **Quick scan:**
 
@@ -55,6 +68,13 @@ dm-secure /path/to/repo
 dm-secure /path/to/repo -o report.json          # write JSON to a file
 dm-secure /path/to/repo --format md --client "Acme Corp" -o report.md   # executive brief
 # exit code is 1 if Critical/High findings exist (CI-gating friendly)
+```
+
+**Launch the dashboard locally** (served by Python — no Node required):
+
+```bash
+cd /path/to/repo && dm-secure ui                 # opens at http://127.0.0.1:8080
+# scans the repo you're standing in; --port / --target are optional
 ```
 
 ---
