@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { execFile } from "node:child_process";
 import { statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { ScanReport } from "@/lib/types";
@@ -42,9 +43,20 @@ function resolveTarget(): string {
 }
 
 function findCliDir(): string | null {
-  // web-ui/ -> ../cli
-  const cli = path.resolve(process.cwd(), "..", "cli");
-  return cli;
+  // Prefer an explicit location supplied by `dm-secure ui` (or the operator).
+  const env = process.env.SECUREGATE_CLI_DIR;
+  if (env) return env;
+  // web-ui/ -> ../cli  (and repo-root layouts)
+  const cwd = process.cwd();
+  for (const rel of [
+    ["..", "cli"],
+    ["cli"],
+    ["..", "..", "cli"],
+  ]) {
+    const p = path.resolve(cwd, ...rel);
+    if (existsSync(path.join(p, "dm_secure", "cli.py"))) return p;
+  }
+  return null;
 }
 
 function runScanner(target: string): Promise<ScanReport> {
@@ -53,7 +65,7 @@ function runScanner(target: string): Promise<ScanReport> {
     if (!cliDir) return reject(new Error("cli dir not found"));
     execFile(
       "python3",
-      ["-m", "securegate", target],
+      ["-m", "dm_secure", target],
       { cwd: cliDir, maxBuffer: 10 * 1024 * 1024 },
       (err, stdout, stderr) => {
         if (err && !stdout) {

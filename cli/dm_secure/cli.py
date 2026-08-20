@@ -42,16 +42,74 @@ def _ui_target_default() -> str:
 
 
 def run_ui(port: int, target: str, host: str = "127.0.0.1") -> int:
+    """Launch the bundled Next.js dashboard.
+
+    The wheel ships the production build as a Next "standalone" server under
+    ``dm_secure/webui/server.js``. We run it with Node (already required for the
+    API routes) and inject the CLI location + scan target via env vars so the
+    dashboard's /api/* endpoints (report + Strix) can talk to the local engine.
+
+    Falls back to a dependency-free Python static server (serving /api/report only)
+    if the standalone server or Node is unavailable.
+    """
+    import shutil
+    import subprocess
+
+    webui_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "dm_secure", "webui")
+    server_js = os.path.join(webui_dir, "server.js")
+    scan_target = os.path.abspath(target)
+    cli_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cli"))
+
+    node = shutil.which("node")
+    if node and os.path.isfile(server_js):
+        env = dict(os.environ)
+        env["PORT"] = str(port)
+        env["HOSTNAME"] = host
+        env["SECUREGATE_CLI_DIR"] = cli_dir
+        env["SECUREGATE_TARGET"] = scan_target
+        url = f"http://{host}:{port}/"
+        print(f"DM SecureGate dashboard running at {url}")
+        print(f"  scanning target: {scan_target}")
+        print(f"  Strix engine: {_strix_path() or 'not detected'}")
+        print("  press Ctrl+C to stop.")
+        try:
+            subprocess.run([node, server_js], cwd=webui_dir, env=env)
+        except KeyboardInterrupt:
+            print("\nstopped.")
+        return 0
+
+    # --- Fallback: minimal Python server (no Node / no standalone build) ---
+    print("warning: Node or the bundled Next server was not found; serving a "
+          "static fallback (Strix endpoints unavailable).", file=sys.stderr)
+    return _run_ui_fallback(webui_dir, scan_target, host, port)
+
+
+def _strix_path() -> str | None:
+    import shutil
+    import stat
+    candidates = [
+        os.path.join(os.path.expanduser("~"), "strix-venv", "bin", "strix"),
+        "/home/opc/strix-venv/bin/strix",
+        "/home/opc/.strix/bin/strix",
+    ]
+    for c in candidates:
+        try:
+            if os.path.isfile(c) and (os.stat(c).st_mode & stat.S_IXUSR):
+                return c
+        except OSError:
+            continue
+    return shutil.which("strix")
+
+
+def _run_ui_fallback(webui_dir: str, scan_target: str, host: str, port: int) -> int:
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     import urllib.parse
 
-    webui_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                             "dm_secure", "webui")
     if not os.path.isdir(webui_dir):
         print(f"error: bundled dashboard not found at {webui_dir}", file=sys.stderr)
         return 1
-
-    scan_target = os.path.abspath(target)
 
     def serve_report():
         try:
@@ -75,18 +133,15 @@ def run_ui(port: int, target: str, host: str = "127.0.0.1") -> int:
                 code, ctype, body = serve_report()
                 self._send(code, ctype, body)
                 return
-            # Serve static dashboard files.
             rel = parsed.path.lstrip("/")
             if rel == "" or rel.endswith("/"):
                 rel = "index.html"
-            # Prevent path traversal.
             rel = rel.replace("\\", "/")
             if ".." in rel.split("/"):
                 self._send(403, "text/plain", b"forbidden")
                 return
             fpath = os.path.join(webui_dir, rel)
             if not os.path.isfile(fpath):
-                # SPA fallback to index.html for client routes.
                 fpath = os.path.join(webui_dir, "index.html")
                 ctype = "text/html"
             else:

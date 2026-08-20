@@ -5,6 +5,7 @@ import type { ScanReport } from "@/lib/types";
 import { GradeBadge } from "@/components/GradeBadge";
 import { StatCard } from "@/components/StatCard";
 import { RemediationCard } from "@/components/RemediationCard";
+import { StrixControlCard } from "@/components/StrixControlCard";
 
 export default function Dashboard() {
   const [report, setReport] = useState<ScanReport | null>(null);
@@ -69,6 +70,8 @@ export default function Dashboard() {
       {error && (
         <div style={{ color: "#f85149", marginTop: 16 }}>Error: {error}</div>
       )}
+
+      <StrixControlCard />
 
       {report && (
         <>
