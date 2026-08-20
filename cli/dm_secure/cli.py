@@ -60,7 +60,8 @@ def run_ui(port: int, target: str, host: str = "127.0.0.1") -> int:
         "dm_secure", "webui")
     server_js = os.path.join(webui_dir, "server.js")
     scan_target = os.path.abspath(target)
-    cli_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cli"))
+    # __file__ = <repo>/cli/dm_secure/cli.py  ->  dirname x2 = <repo>/cli
+    cli_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     node = shutil.which("node")
     if node and os.path.isfile(server_js):
